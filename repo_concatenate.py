@@ -4,8 +4,11 @@ import gitignore_parser
 # Directory containing the repository (current directory by default)
 repo_dir = '.'  # Adjust this path if needed
 
+# Get the name of the containing folder or repo
+repo_name = os.path.basename(os.path.abspath(repo_dir))
+
 # Output file
-output_file = 'all_files_concatenated.txt'
+output_file = f'{repo_name}.txt'
 
 # Name of this script
 script_name = os.path.basename(__file__)
