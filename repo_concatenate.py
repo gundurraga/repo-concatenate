@@ -47,13 +47,27 @@ def parse_gitignore(file_path):
     return None
 
 
-def should_include_file(file_path, gitignore):
+def is_file_empty(file_path):
     """
-    Check if a file should be included based on .gitignore rules.
+    Check if a file is empty.
+
+    Args:
+        file_path (str): Path to the file to check.
+
+    Returns:
+        bool: True if the file is empty, False otherwise.
+    """
+    return os.path.getsize(file_path) == 0
+
+
+def should_include_file(file_path, gitignore, include_empty=False):
+    """
+    Check if a file should be included based on .gitignore rules and emptiness.
 
     Args:
         file_path (str): Path to the file to check.
         gitignore (function or None): Function to check if a file should be ignored.
+        include_empty (bool): Whether to include empty files.
 
     Returns:
         bool: True if the file should be included, False otherwise.
@@ -61,7 +75,8 @@ def should_include_file(file_path, gitignore):
     return (file_path != OUTPUT_FILE and
             os.path.basename(file_path) != SCRIPT_NAME and
             os.path.basename(file_path) != GITIGNORE_FILENAME and
-            (gitignore is None or not gitignore(file_path)))
+            (gitignore is None or not gitignore(file_path)) and
+            (include_empty or not is_file_empty(file_path)))
 
 
 def get_relevant_files(repo_dir, gitignore):
