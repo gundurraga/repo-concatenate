@@ -1,101 +1,182 @@
 import os
+from collections import defaultdict
+
 import gitignore_parser
-import collections
 
+# Configuration
 # Directory containing the repository (current directory by default)
-repo_dir = '.'  # Adjust this path if needed
+REPO_DIR = '.'
+OUTPUT_FILE_SUFFIX = '.txt'  # Suffix for the output file
+GITIGNORE_FILENAME = '.gitignore'
 
-# Get the name of the containing folder or repo
-repo_name = os.path.basename(os.path.abspath(repo_dir))
+# Derived constants
+REPO_NAME = os.path.basename(os.path.abspath(REPO_DIR))
+OUTPUT_FILE = f'{REPO_NAME}{OUTPUT_FILE_SUFFIX}'
+SCRIPT_NAME = os.path.basename(__file__)
 
-# Output file
-output_file = f'{repo_name}.txt'
 
-# Name of this script
-script_name = os.path.basename(__file__)
+def handle_error(error_message, exit_program=False):
+    """
+    Handle errors by printing the error message and optionally exiting the program.
 
-# Function to read and parse .gitignore
+    Args:
+        error_message (str): The error message to display.
+        exit_program (bool): Whether to exit the program after displaying the error.
+    """
+    print(f"Error: {error_message}")
+    if exit_program:
+        print("Exiting program due to error.")
+        exit(1)
 
 
 def parse_gitignore(file_path):
-    if os.path.exists(file_path):
-        gitignore = gitignore_parser.parse_gitignore(file_path)
-        return gitignore
-    return None
+    """
+    Parse the .gitignore file if it exists.
 
-# Function to check if a file should be included
+    Args:
+        file_path (str): Path to the .gitignore file.
+
+    Returns:
+        function or None: A function that checks if a file should be ignored, or None if .gitignore doesn't exist.
+    """
+    try:
+        if os.path.exists(file_path):
+            return gitignore_parser.parse_gitignore(file_path)
+    except Exception as e:
+        handle_error(f"Failed to parse .gitignore file: {e}")
+    return None
 
 
 def should_include_file(file_path, gitignore):
-    return (file_path != output_file and
-            os.path.basename(file_path) != script_name and
-            (gitignore is None or not gitignore(file_path)))
+    """
+    Check if a file should be included based on .gitignore rules.
 
-# Function to get all relevant files
+    Args:
+        file_path (str): Path to the file to check.
+        gitignore (function or None): Function to check if a file should be ignored.
+
+    Returns:
+        bool: True if the file should be included, False otherwise.
+    """
+    return (file_path != OUTPUT_FILE and
+            os.path.basename(file_path) != SCRIPT_NAME and
+            (gitignore is None or not gitignore(file_path)))
 
 
 def get_relevant_files(repo_dir, gitignore):
+    """
+    Get all relevant files respecting .gitignore rules.
+
+    Args:
+        repo_dir (str): Path to the repository directory.
+        gitignore (function or None): Function to check if a file should be ignored.
+
+    Returns:
+        list: List of relevant file paths.
+    """
     relevant_files = []
-    for root, dirs, files in os.walk(repo_dir):
-        # Remove .git directory
-        if '.git' in dirs:
-            dirs.remove('.git')
-
-        # Remove ignored directories
-        if gitignore:
-            dirs[:] = [d for d in dirs if not gitignore(os.path.join(root, d))]
-
-        for file in files:
-            file_path = os.path.join(root, file)
-            if should_include_file(file_path, gitignore):
-                relevant_files.append(file_path)
+    try:
+        for root, dirs, files in os.walk(repo_dir):
+            if '.git' in dirs:
+                dirs.remove('.git')
+            if gitignore:
+                dirs[:] = [d for d in dirs if not gitignore(
+                    os.path.join(root, d))]
+            for file in files:
+                file_path = os.path.join(root, file)
+                if should_include_file(file_path, gitignore):
+                    relevant_files.append(file_path)
+    except Exception as e:
+        handle_error(f"Error while getting relevant files: {e}")
     return relevant_files
 
-# Function to get folder structure, respecting .gitignore
 
+def get_folder_structure(start_path, gitignore):
+    """
+    Generate a tree-like folder structure respecting .gitignore rules.
 
-def get_folder_structure(start_path, gitignore, output_file):
+    Args:
+        start_path (str): Path to start generating the folder structure from.
+        gitignore (function or None): Function to check if a file should be ignored.
+
+    Yields:
+        str: Lines representing the folder structure.
+    """
     def add_to_structure(path, prefix=''):
-        entries = sorted(os.scandir(path), key=lambda e: e.name)
-        entries = [e for e in entries if e.name !=
-                   '.git' and e.name != output_file and e.name != script_name]
-        if gitignore:
-            entries = [e for e in entries if not gitignore(e.path)]
+        try:
+            entries = sorted(os.scandir(path), key=lambda e: e.name)
+            entries = [e for e in entries if e.name !=
+                       '.git' and e.name != OUTPUT_FILE and e.name != SCRIPT_NAME]
+            if gitignore:
+                entries = [e for e in entries if not gitignore(e.path)]
 
-        for i, entry in enumerate(entries):
-            is_last = (i == len(entries) - 1)
-            if entry.is_dir():
-                yield f"{prefix}{'└── ' if is_last else '├── '}{entry.name}/"
-                extension = '    ' if is_last else '│   '
-                yield from add_to_structure(entry.path, prefix + extension)
-            else:
-                yield f"{prefix}{'└── ' if is_last else '├── '}{entry.name}"
+            for i, entry in enumerate(entries):
+                is_last = (i == len(entries) - 1)
+                if entry.is_dir():
+                    yield f"{prefix}{'└── ' if is_last else '├── '}{entry.name}/"
+                    extension = '    ' if is_last else '│   '
+                    yield from add_to_structure(entry.path, prefix + extension)
+                else:
+                    yield f"{prefix}{'└── ' if is_last else '├── '}{entry.name}"
+        except Exception as e:
+            handle_error(f"Error while generating folder structure: {e}")
 
-    yield f"{repo_name}/"
+    yield f"{REPO_NAME}/"
     yield from add_to_structure(start_path)
-
-# Statistics functions
 
 
 def count_total_lines(relevant_files):
+    """
+    Count total lines of code in all relevant files.
+
+    Args:
+        relevant_files (list): List of relevant file paths.
+
+    Returns:
+        int: Total number of lines in all relevant files.
+    """
     total_lines = 0
     for file_path in relevant_files:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            total_lines += sum(1 for line in f)
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                total_lines += sum(1 for _ in f)
+        except Exception as e:
+            handle_error(f"Error while counting lines in {file_path}: {e}")
     return total_lines
 
 
 def count_lines_per_file_type(relevant_files):
-    lines_per_type = collections.defaultdict(int)
+    """
+    Count lines of code per file type.
+
+    Args:
+        relevant_files (list): List of relevant file paths.
+
+    Returns:
+        dict: Dictionary with file extensions as keys and line counts as values.
+    """
+    lines_per_type = defaultdict(int)
     for file_path in relevant_files:
-        _, ext = os.path.splitext(file_path)
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            lines_per_type[ext] += sum(1 for line in f)
+        try:
+            _, ext = os.path.splitext(file_path)
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                lines_per_type[ext] += sum(1 for _ in f)
+        except Exception as e:
+            handle_error(f"Error while counting lines in {file_path}: {e}")
     return dict(lines_per_type)
 
 
 def count_files_per_type(relevant_files):
-    files_per_type = collections.defaultdict(int)
+    """
+    Count number of files per file type.
+
+    Args:
+        relevant_files (list): List of relevant file paths.
+
+    Returns:
+        dict: Dictionary with file extensions as keys and file counts as values.
+    """
+    files_per_type = defaultdict(int)
     for file_path in relevant_files:
         _, ext = os.path.splitext(file_path)
         files_per_type[ext] += 1
@@ -103,36 +184,83 @@ def count_files_per_type(relevant_files):
 
 
 def calculate_average_file_size(relevant_files):
-    total_size = sum(os.path.getsize(file_path)
-                     for file_path in relevant_files)
-    return total_size / len(relevant_files) if relevant_files else 0
+    """
+    Calculate the average file size of relevant files.
+
+    Args:
+        relevant_files (list): List of relevant file paths.
+
+    Returns:
+        float: Average file size in bytes.
+    """
+    try:
+        total_size = sum(os.path.getsize(file_path)
+                         for file_path in relevant_files)
+        return total_size / len(relevant_files) if relevant_files else 0
+    except Exception as e:
+        handle_error(f"Error while calculating average file size: {e}")
+        return 0
 
 
 def find_largest_file(relevant_files):
+    """
+    Find the largest file among relevant files.
+
+    Args:
+        relevant_files (list): List of relevant file paths.
+
+    Returns:
+        dict: Dictionary containing information about the largest file.
+    """
     largest_file = {'name': '', 'size': 0, 'lines': 0}
     for file_path in relevant_files:
-        size = os.path.getsize(file_path)
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            lines = sum(1 for line in f)
-        if size > largest_file['size']:
-            largest_file = {'name': os.path.basename(
-                file_path), 'size': size, 'lines': lines}
+        try:
+            size = os.path.getsize(file_path)
+            if size > largest_file['size']:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = sum(1 for _ in f)
+                largest_file = {
+                    'name': os.path.basename(file_path),
+                    'size': size,
+                    'lines': lines
+                }
+        except Exception as e:
+            handle_error(f"Error while processing {file_path}: {e}")
     return largest_file
 
 
-def calculate_statistics(repo_dir, folder_structure, gitignore):
+def calculate_statistics(repo_dir, gitignore):
+    """
+    Calculate various statistics about the repository.
+
+    Args:
+        repo_dir (str): Path to the repository directory.
+        gitignore (function or None): Function to check if a file should be ignored.
+
+    Returns:
+        dict: Dictionary containing various statistics about the repository.
+    """
     relevant_files = get_relevant_files(repo_dir, gitignore)
-    stats = {}
-    stats['total_files'] = len(relevant_files)
-    stats['total_lines'] = count_total_lines(relevant_files)
-    stats['lines_per_file_type'] = count_lines_per_file_type(relevant_files)
-    stats['files_per_type'] = count_files_per_type(relevant_files)
-    stats['average_file_size'] = calculate_average_file_size(relevant_files)
-    stats['largest_file'] = find_largest_file(relevant_files)
-    return stats
+    return {
+        'total_files': len(relevant_files),
+        'total_lines': count_total_lines(relevant_files),
+        'lines_per_file_type': count_lines_per_file_type(relevant_files),
+        'files_per_type': count_files_per_type(relevant_files),
+        'average_file_size': calculate_average_file_size(relevant_files),
+        'largest_file': find_largest_file(relevant_files)
+    }
 
 
 def format_statistics(stats):
+    """
+    Format the calculated statistics into a readable string.
+
+    Args:
+        stats (dict): Dictionary containing various statistics about the repository.
+
+    Returns:
+        str: Formatted string of statistics.
+    """
     formatted_stats = [
         "Code Statistics:",
         f"1. Total number of files: {stats['total_files']}",
@@ -159,74 +287,74 @@ def format_statistics(stats):
     return "\n".join(formatted_stats)
 
 
-# Parse the .gitignore file
-gitignore_path = os.path.join(repo_dir, '.gitignore')
-gitignore = parse_gitignore(gitignore_path)
+def main():
+    """Main function to run the script."""
+    try:
+        gitignore_path = os.path.join(REPO_DIR, GITIGNORE_FILENAME)
+        gitignore = parse_gitignore(gitignore_path)
 
-if gitignore is None:
-    print("No .gitignore file found. Proceeding without ignoring any files.")
+        if gitignore is None:
+            print(
+                f"No {GITIGNORE_FILENAME} file found. Proceeding without ignoring any files.")
 
-# Get folder structure
-folder_structure = list(get_folder_structure(repo_dir, gitignore, output_file))
+        folder_structure = list(get_folder_structure(REPO_DIR, gitignore))
+        stats = calculate_statistics(REPO_DIR, gitignore)
 
-# Calculate statistics
-stats = calculate_statistics(repo_dir, folder_structure, gitignore)
+        with open(OUTPUT_FILE, 'w', encoding='utf-8') as outfile:
+            outfile.write(format_statistics(stats))
+            outfile.write("\n\nFolder Structure:\n")
+            outfile.write("\n".join(folder_structure))
+            outfile.write("\n\nFile Index:\n")
 
-with open(output_file, 'w', encoding='utf-8') as outfile:
-    # Write statistics
-    outfile.write(format_statistics(stats))
-    outfile.write("\n\n")
+            file_index = []
+            file_number = 1
 
-    # Write folder structure
-    outfile.write("Folder Structure:\n")
-    outfile.write("\n".join(folder_structure))
-    outfile.write("\n\nFile Index:\n")
+            for root, dirs, files in os.walk(REPO_DIR):
+                if '.git' in dirs:
+                    dirs.remove('.git')
+                if gitignore:
+                    dirs[:] = [d for d in dirs if not gitignore(
+                        os.path.join(root, d))]
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if should_include_file(file_path, gitignore):
+                        rel_path = os.path.relpath(file_path, REPO_DIR)
+                        file_index.append(f"{file_number}. {rel_path}")
+                        file_number += 1
 
-    # Prepare file index
-    file_index = []
-    file_number = 1
+            outfile.write("\n".join(file_index))
+            outfile.write("\n\n")
 
-    for root, dirs, files in os.walk(repo_dir):
-        # Skip .git directory and its contents
-        if '.git' in dirs:
-            dirs.remove('.git')
+            file_number = 1
 
-        # Remove ignored directories based on .gitignore
-        if gitignore:
-            dirs[:] = [d for d in dirs if not gitignore(os.path.join(root, d))]
+            for root, dirs, files in os.walk(REPO_DIR):
+                if '.git' in dirs:
+                    dirs.remove('.git')
+                if gitignore:
+                    dirs[:] = [d for d in dirs if not gitignore(
+                        os.path.join(root, d))]
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if should_include_file(file_path, gitignore):
+                        rel_path = os.path.relpath(file_path, REPO_DIR)
+                        try:
+                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as infile:
+                                separator = f"{'=' * 80}\n"
+                                file_header = f"FILE_{file_number:04d}: {rel_path}\n"
+                                outfile.write(
+                                    f"\n{separator}{file_header}{separator}\n")
+                                outfile.write(infile.read())
+                                outfile.write(
+                                    f"\n{separator}END OF FILE_{file_number:04d}: {rel_path}\n{separator}\n")
+                                file_number += 1
+                        except Exception as e:
+                            handle_error(
+                                f"Error while processing {file_path}: {e}")
 
-        for file in files:
-            file_path = os.path.join(root, file)
-            if should_include_file(file_path, gitignore):
-                rel_path = os.path.relpath(file_path, repo_dir)
-                file_index.append(f"{file_number}. {rel_path}")
-                file_number += 1
+        print(f"All files have been concatenated into {OUTPUT_FILE}")
+    except Exception as e:
+        handle_error(f"An unexpected error occurred: {e}", exit_program=True)
 
-    # Write file index
-    outfile.write("\n".join(file_index))
-    outfile.write("\n\n")
 
-    # Reset file number for content
-    file_number = 1
-
-    # Write file contents
-    for root, dirs, files in os.walk(repo_dir):
-        if '.git' in dirs:
-            dirs.remove('.git')
-
-        if gitignore:
-            dirs[:] = [d for d in dirs if not gitignore(os.path.join(root, d))]
-
-        for file in files:
-            file_path = os.path.join(root, file)
-            if should_include_file(file_path, gitignore):
-                rel_path = os.path.relpath(file_path, repo_dir)
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as infile:
-                    outfile.write(
-                        f"\n########### {file_number}. {rel_path} ###########\n\n")
-                    outfile.write(infile.read())
-                    outfile.write(
-                        f"\n--- End of {file_number}. {rel_path} ---\n")
-                    file_number += 1
-
-print(f"All files have been concatenated into {output_file}")
+if __name__ == "__main__":
+    main()
