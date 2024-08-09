@@ -60,6 +60,7 @@ def should_include_file(file_path, gitignore):
     """
     return (file_path != OUTPUT_FILE and
             os.path.basename(file_path) != SCRIPT_NAME and
+            os.path.basename(file_path) != GITIGNORE_FILENAME and
             (gitignore is None or not gitignore(file_path)))
 
 
@@ -106,7 +107,7 @@ def get_folder_structure(start_path, gitignore):
         try:
             entries = sorted(os.scandir(path), key=lambda e: e.name)
             entries = [e for e in entries if e.name !=
-                       '.git' and e.name != OUTPUT_FILE and e.name != SCRIPT_NAME]
+                       '.git' and e.name != OUTPUT_FILE and e.name != SCRIPT_NAME and e.name != GITIGNORE_FILENAME]
             if gitignore:
                 entries = [e for e in entries if not gitignore(e.path)]
 
