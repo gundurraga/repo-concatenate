@@ -1,5 +1,6 @@
 import os
 import gitignore_parser
+import collections
 
 # Directory containing the repository (current directory by default)
 repo_dir = '.'  # Adjust this path if needed
@@ -21,6 +22,34 @@ def parse_gitignore(file_path):
         gitignore = gitignore_parser.parse_gitignore(file_path)
         return gitignore
     return None
+
+# Function to check if a file should be included
+
+
+def should_include_file(file_path, gitignore):
+    return (file_path != output_file and
+            os.path.basename(file_path) != script_name and
+            (gitignore is None or not gitignore(file_path)))
+
+# Function to get all relevant files
+
+
+def get_relevant_files(repo_dir, gitignore):
+    relevant_files = []
+    for root, dirs, files in os.walk(repo_dir):
+        # Remove .git directory
+        if '.git' in dirs:
+            dirs.remove('.git')
+
+        # Remove ignored directories
+        if gitignore:
+            dirs[:] = [d for d in dirs if not gitignore(os.path.join(root, d))]
+
+        for file in files:
+            file_path = os.path.join(root, file)
+            if should_include_file(file_path, gitignore):
+                relevant_files.append(file_path)
+    return relevant_files
 
 # Function to get folder structure, respecting .gitignore
 
@@ -45,13 +74,89 @@ def get_folder_structure(start_path, gitignore, output_file):
     yield f"{repo_name}/"
     yield from add_to_structure(start_path)
 
-# Function to check if a file should be included
+# Statistics functions
 
 
-def should_include_file(file_path, gitignore):
-    return (gitignore is None or not gitignore(file_path)) and \
-        os.path.basename(file_path) != output_file and \
-        os.path.basename(file_path) != script_name
+def count_total_lines(relevant_files):
+    total_lines = 0
+    for file_path in relevant_files:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            total_lines += sum(1 for line in f)
+    return total_lines
+
+
+def count_lines_per_file_type(relevant_files):
+    lines_per_type = collections.defaultdict(int)
+    for file_path in relevant_files:
+        _, ext = os.path.splitext(file_path)
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines_per_type[ext] += sum(1 for line in f)
+    return dict(lines_per_type)
+
+
+def count_files_per_type(relevant_files):
+    files_per_type = collections.defaultdict(int)
+    for file_path in relevant_files:
+        _, ext = os.path.splitext(file_path)
+        files_per_type[ext] += 1
+    return dict(files_per_type)
+
+
+def calculate_average_file_size(relevant_files):
+    total_size = sum(os.path.getsize(file_path)
+                     for file_path in relevant_files)
+    return total_size / len(relevant_files) if relevant_files else 0
+
+
+def find_largest_file(relevant_files):
+    largest_file = {'name': '', 'size': 0, 'lines': 0}
+    for file_path in relevant_files:
+        size = os.path.getsize(file_path)
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = sum(1 for line in f)
+        if size > largest_file['size']:
+            largest_file = {'name': os.path.basename(
+                file_path), 'size': size, 'lines': lines}
+    return largest_file
+
+
+def calculate_statistics(repo_dir, folder_structure, gitignore):
+    relevant_files = get_relevant_files(repo_dir, gitignore)
+    stats = {}
+    stats['total_files'] = len(relevant_files)
+    stats['total_lines'] = count_total_lines(relevant_files)
+    stats['lines_per_file_type'] = count_lines_per_file_type(relevant_files)
+    stats['files_per_type'] = count_files_per_type(relevant_files)
+    stats['average_file_size'] = calculate_average_file_size(relevant_files)
+    stats['largest_file'] = find_largest_file(relevant_files)
+    return stats
+
+
+def format_statistics(stats):
+    formatted_stats = [
+        "Code Statistics:",
+        f"1. Total number of files: {stats['total_files']}",
+        f"2. Total lines of code: {stats['total_lines']}",
+        "3. Lines of code per file type:",
+    ]
+    for ext, lines in stats['lines_per_file_type'].items():
+        formatted_stats.append(f"   - {ext or 'No extension'}: {lines}")
+
+    formatted_stats.extend([
+        "4. Number of files per file type:",
+    ])
+    for ext, count in stats['files_per_type'].items():
+        formatted_stats.append(f"   - {ext or 'No extension'}: {count}")
+
+    formatted_stats.extend([
+        f"5. Average file size: {stats['average_file_size']:.2f} bytes",
+        "6. Largest file:",
+        f"   - Name: {stats['largest_file']['name']}",
+        f"   - Size: {stats['largest_file']['size']} bytes",
+        f"   - Lines: {stats['largest_file']['lines']}",
+    ])
+
+    return "\n".join(formatted_stats)
 
 
 # Parse the .gitignore file
@@ -64,7 +169,14 @@ if gitignore is None:
 # Get folder structure
 folder_structure = list(get_folder_structure(repo_dir, gitignore, output_file))
 
+# Calculate statistics
+stats = calculate_statistics(repo_dir, folder_structure, gitignore)
+
 with open(output_file, 'w', encoding='utf-8') as outfile:
+    # Write statistics
+    outfile.write(format_statistics(stats))
+    outfile.write("\n\n")
+
     # Write folder structure
     outfile.write("Folder Structure:\n")
     outfile.write("\n".join(folder_structure))
