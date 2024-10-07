@@ -1,47 +1,57 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import process from "node:process";
 
 // Configuration
-const REPO_DIR = ".";
-const OUTPUT_FILE_SUFFIX = ".txt";
-const GITIGNORE_FILENAME = ".gitignore";
-const MAX_LINES_FOR_LARGE_FILES = 300;
+const CONFIG = {
+  // Directory of the repository to process (current directory by default)
+  REPO_DIR: ".",
+  // Suffix for the output file
+  OUTPUT_FILE_SUFFIX: ".txt",
+  // Name of the gitignore file
+  GITIGNORE_FILENAME: ".gitignore",
+  // Maximum number of lines for truncated files
+  MAX_LINES_FOR_TRUNCATED_FILES: 300,
+  // File extensions to skip (binary files)
+  BINARY_EXTENSIONS: [
+    ".webp",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".pdf",
+    ".zip",
+    ".exe",
+    ".ico",
+    ".svg",
+  ],
+  // Files to ignore
+  IGNORE_FILES: [
+    "package-lock.json",
+    "yarn.lock",
+    ".DS_Store",
+    "Thumbs.db",
+    ".gitattributes",
+    ".eslintcache",
+    ".npmrc",
+    ".yarnrc",
+  ],
+  // File extensions to truncate
+  TRUNCATE_EXTENSIONS: [".json", ".geojson"],
+};
 
 // Derived constants
-const REPO_NAME = path.basename(path.resolve(REPO_DIR));
-const OUTPUT_FILE = `${REPO_NAME}${OUTPUT_FILE_SUFFIX}`;
+const REPO_NAME = path.basename(path.resolve(CONFIG.REPO_DIR));
+const OUTPUT_FILE = `${REPO_NAME}${CONFIG.OUTPUT_FILE_SUFFIX}`;
 const SCRIPT_NAME = path.basename(fileURLToPath(import.meta.url));
 
-// List of binary file extensions to skip
-const BINARY_EXTENSIONS = new Set([
-  ".webp",
-  ".jpg",
-  ".jpeg",
-  ".png",
-  ".gif",
-  ".pdf",
-  ".zip",
-  ".exe",
-  ".ico",
-  ".svg",
-]);
+// Convert arrays to sets for faster lookup
+const BINARY_EXTENSIONS = new Set(CONFIG.BINARY_EXTENSIONS);
+const IGNORE_FILES = new Set(CONFIG.IGNORE_FILES);
+const TRUNCATE_EXTENSIONS = new Set(CONFIG.TRUNCATE_EXTENSIONS);
 
-// List of files to ignore
-const IGNORE_FILES = new Set([
-  "package-lock.json",
-  "yarn.lock",
-  ".DS_Store",
-  "Thumbs.db",
-  ".gitattributes",
-  ".eslintcache",
-  ".npmrc",
-  ".yarnrc",
-]);
-
-// List of file extensions to truncate
-const TRUNCATE_EXTENSIONS = new Set([".json", ".geojson"]);
-
+// Handle errors and optionally exit the program
 function handleError(errorMessage, exitProgram = false) {
   console.error(`Error: ${errorMessage}`);
   if (exitProgram) {
@@ -50,6 +60,7 @@ function handleError(errorMessage, exitProgram = false) {
   }
 }
 
+// Parse the .gitignore file and return a function to check if a file should be ignored
 function parseGitignore(filePath) {
   try {
     if (fs.existsSync(filePath)) {
@@ -72,17 +83,19 @@ function parseGitignore(filePath) {
   return null;
 }
 
+// Check if a file is empty
 function isFileEmpty(filePath) {
   return fs.statSync(filePath).size === 0;
 }
 
+// Determine if a file should be included in the output
 function shouldIncludeFile(filePath, gitignore, includeEmpty = false) {
   const fileName = path.basename(filePath);
   const ext = path.extname(filePath).toLowerCase();
   return (
     fileName !== OUTPUT_FILE &&
     fileName !== SCRIPT_NAME &&
-    fileName !== GITIGNORE_FILENAME &&
+    fileName !== CONFIG.GITIGNORE_FILENAME &&
     !IGNORE_FILES.has(fileName) &&
     (gitignore === null || !gitignore(filePath)) &&
     (includeEmpty || !isFileEmpty(filePath)) &&
@@ -90,6 +103,7 @@ function shouldIncludeFile(filePath, gitignore, includeEmpty = false) {
   );
 }
 
+// Get all relevant files in the repository
 async function getRelevantFiles(repoDir, gitignore) {
   const relevantFiles = [];
   async function walk(dir) {
@@ -113,6 +127,7 @@ async function getRelevantFiles(repoDir, gitignore) {
   return relevantFiles;
 }
 
+// Generate a visual representation of the folder structure
 async function getFolderStructure(startPath, gitignore) {
   const structure = [`${REPO_NAME}/`];
   async function addToStructure(currentPath, prefix = "") {
@@ -126,7 +141,7 @@ async function getFolderStructure(startPath, gitignore) {
             e.name !== ".git" &&
             e.name !== OUTPUT_FILE &&
             e.name !== SCRIPT_NAME &&
-            e.name !== GITIGNORE_FILENAME &&
+            e.name !== CONFIG.GITIGNORE_FILENAME &&
             !IGNORE_FILES.has(e.name)
         )
         .filter((e) => !gitignore || !gitignore(path.join(currentPath, e.name)))
@@ -154,6 +169,7 @@ async function getFolderStructure(startPath, gitignore) {
   return structure;
 }
 
+// Count the total number of lines in all relevant files
 async function countTotalLines(relevantFiles) {
   let totalLines = 0;
   for (const filePath of relevantFiles) {
@@ -167,6 +183,7 @@ async function countTotalLines(relevantFiles) {
   return totalLines;
 }
 
+// Count the number of lines for each file type
 async function countLinesPerFileType(relevantFiles) {
   const linesPerType = {};
   for (const filePath of relevantFiles) {
@@ -181,6 +198,7 @@ async function countLinesPerFileType(relevantFiles) {
   return linesPerType;
 }
 
+// Count the number of files for each file type
 function countFilesPerType(relevantFiles) {
   return relevantFiles.reduce((acc, filePath) => {
     const ext = path.extname(filePath);
@@ -189,6 +207,7 @@ function countFilesPerType(relevantFiles) {
   }, {});
 }
 
+// Calculate the average file size of all relevant files
 async function calculateAverageFileSize(relevantFiles) {
   try {
     const totalSize = await relevantFiles.reduce(
@@ -206,6 +225,7 @@ async function calculateAverageFileSize(relevantFiles) {
   }
 }
 
+// Find the largest file in the repository
 async function findLargestFile(relevantFiles) {
   let largestFile = { name: "", size: 0, lines: 0 };
   for (const filePath of relevantFiles) {
@@ -226,6 +246,7 @@ async function findLargestFile(relevantFiles) {
   return largestFile;
 }
 
+// Calculate various statistics about the repository
 async function calculateStatistics(repoDir, gitignore) {
   const relevantFiles = await getRelevantFiles(repoDir, gitignore);
   return {
@@ -238,6 +259,7 @@ async function calculateStatistics(repoDir, gitignore) {
   };
 }
 
+// Format the statistics into a human-readable string
 function formatStatistics(stats) {
   const formattedStats = [
     "Code Statistics:",
@@ -265,6 +287,7 @@ function formatStatistics(stats) {
   return formattedStats.join("\n");
 }
 
+// Process the content of a file, truncating if necessary
 async function processFileContent(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const content = await fs.promises.readFile(filePath, "utf8");
@@ -272,36 +295,65 @@ async function processFileContent(filePath) {
 
   if (
     TRUNCATE_EXTENSIONS.has(ext) &&
-    lines.length > MAX_LINES_FOR_LARGE_FILES
+    lines.length > CONFIG.MAX_LINES_FOR_TRUNCATED_FILES
   ) {
     const truncatedContent = lines
-      .slice(0, MAX_LINES_FOR_LARGE_FILES)
+      .slice(0, CONFIG.MAX_LINES_FOR_TRUNCATED_FILES)
       .join("\n");
     return (
       truncatedContent +
-      `\n\n(truncated to ${MAX_LINES_FOR_LARGE_FILES} lines for brevity, total file length: ${lines.length} lines)`
+      `\n\n(truncated to ${CONFIG.MAX_LINES_FOR_TRUNCATED_FILES} lines for brevity, total file length: ${lines.length} lines)`
     );
   }
 
   return content;
 }
 
+// Main function to orchestrate the entire process
 async function main() {
   try {
-    const gitignorePath = path.join(REPO_DIR, GITIGNORE_FILENAME);
+    const gitignorePath = path.join(CONFIG.REPO_DIR, CONFIG.GITIGNORE_FILENAME);
     const gitignore = parseGitignore(gitignorePath);
 
     if (gitignore === null) {
       console.log(
-        `No ${GITIGNORE_FILENAME} file found. Proceeding without ignoring any files.`
+        `No ${CONFIG.GITIGNORE_FILENAME} file found. Proceeding without ignoring any files.`
       );
     }
 
-    const folderStructure = await getFolderStructure(REPO_DIR, gitignore);
-    const stats = await calculateStatistics(REPO_DIR, gitignore);
+    const folderStructure = await getFolderStructure(
+      CONFIG.REPO_DIR,
+      gitignore
+    );
+    const repositoryStatistics = await calculateStatistics(
+      CONFIG.REPO_DIR,
+      gitignore
+    );
 
-    // Add AI instructions at the beginning of the output
-    let output = `AI INSTRUCTIONS:
+    let output = generateAIInstructions();
+    output += "=".repeat(80) + "\n\n";
+    output += formatStatistics(repositoryStatistics);
+    output += "\n\nFolder Structure:\n";
+    output += folderStructure.join("\n");
+    output += "\n\nFile Index:\n";
+
+    const relevantFiles = await getRelevantFiles(CONFIG.REPO_DIR, gitignore);
+    const fileIndex = generateFileIndex(relevantFiles);
+    output += fileIndex;
+    output += "\n\n";
+
+    output += await processRelevantFiles(relevantFiles);
+
+    await fs.promises.writeFile(OUTPUT_FILE, output, "utf8");
+    console.log(`All files have been concatenated into ${OUTPUT_FILE}`);
+  } catch (e) {
+    handleError(`An unexpected error occurred: ${e}`, true);
+  }
+}
+
+// Generate AI instructions for the output file
+function generateAIInstructions() {
+  return `AI INSTRUCTIONS:
 When assisting with this project, please adhere to the following guidelines:
 
 1. Always return the full, working file when editing code, ready for copy-paste.
@@ -318,46 +370,39 @@ When assisting with this project, please adhere to the following guidelines:
 Please keep these instructions in mind when providing assistance or generating code for this project.
 
 `;
+}
 
-    // Add a separator after the instructions
-    output += "=".repeat(80) + "\n\n";
+// Generate a file index for relevant files
+function generateFileIndex(relevantFiles) {
+  return relevantFiles
+    .map(
+      (file, index) => `${index + 1}. ${path.relative(CONFIG.REPO_DIR, file)}`
+    )
+    .join("\n");
+}
 
-    output += formatStatistics(stats);
-    output += "\n\nFolder Structure:\n";
-    output += folderStructure.join("\n");
-    output += "\n\nFile Index:\n";
-
-    const relevantFiles = await getRelevantFiles(REPO_DIR, gitignore);
-    const fileIndex = relevantFiles.map(
-      (file, index) => `${index + 1}. ${path.relative(REPO_DIR, file)}`
-    );
-    output += fileIndex.join("\n");
-    output += "\n\n";
-
-    for (let i = 0; i < relevantFiles.length; i++) {
-      const filePath = relevantFiles[i];
-      const relPath = path.relative(REPO_DIR, filePath);
-      try {
-        const content = await processFileContent(filePath);
-        const separator = "=".repeat(80) + "\n";
-        const fileHeader = `FILE_${(i + 1)
-          .toString()
-          .padStart(4, "0")}: ${relPath}\n`;
-        output += `\n${separator}${fileHeader}${separator}\n`;
-        output += content;
-        output += `\n${separator}END OF FILE_${(i + 1)
-          .toString()
-          .padStart(4, "0")}: ${relPath}\n${separator}\n`;
-      } catch (e) {
-        handleError(`Error while processing ${filePath}: ${e}`);
-      }
+// Process all relevant files and generate the output content
+async function processRelevantFiles(relevantFiles) {
+  let output = "";
+  for (let i = 0; i < relevantFiles.length; i++) {
+    const filePath = relevantFiles[i];
+    const relPath = path.relative(CONFIG.REPO_DIR, filePath);
+    try {
+      const content = await processFileContent(filePath);
+      const separator = "=".repeat(80) + "\n";
+      const fileHeader = `FILE_${(i + 1)
+        .toString()
+        .padStart(4, "0")}: ${relPath}\n`;
+      output += `\n${separator}${fileHeader}${separator}\n`;
+      output += content;
+      output += `\n${separator}END OF FILE_${(i + 1)
+        .toString()
+        .padStart(4, "0")}: ${relPath}\n${separator}\n`;
+    } catch (e) {
+      handleError(`Error while processing ${filePath}: ${e}`);
     }
-
-    await fs.promises.writeFile(OUTPUT_FILE, output, "utf8");
-    console.log(`All files have been concatenated into ${OUTPUT_FILE}`);
-  } catch (e) {
-    handleError(`An unexpected error occurred: ${e}`, true);
   }
+  return output;
 }
 
 main();
