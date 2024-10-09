@@ -19,14 +19,14 @@ Repo Concatenator creates a single file containing your entire codebase, making 
 ### Python
 
 ```bash
-wget https://raw.githubusercontent.com/username/repo-concatenator/main/repo_concatenate.py
+wget https://raw.githubusercontent.com/gundurraga/repo-concatenate/main/repo_concatenate.py
 python repo_concatenate.py
 ```
 
 ### JavaScript
 
 ```bash
-wget https://raw.githubusercontent.com/username/repo-concatenator/main/repo_concatenate.js
+wget https://raw.githubusercontent.com/gundurraga/repo-concatenate/main/repo_concatenate.js
 npm install fs path url
 node repo_concatenate.js
 ```
@@ -50,8 +50,8 @@ Your consolidated codebase will be saved as `{repo_name}.txt` in the current dir
 
 ## Contribute
 
-Got ideas? Found a bug? Contributions are welcome! Open an issue or send a pull request.
+Got ideas? Found a bug? Contributions are welcome! Open an issue or send a pull request on our [GitHub repository](https://github.com/gundurraga/repo-concatenate).
 
 ## License
 
-MIT License. Go wild, just give credit where it's due.
+MIT License. Go wild, just give credit where it's due. See the [LICENSE](https://github.com/gundurraga/repo-concatenate/blob/main/LICENSE) file for details.
