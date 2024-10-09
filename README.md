@@ -1,48 +1,57 @@
 # Repo Concatenator
 
-A simple, agnostic tool to concatenate repository contents into a single file.
+Supercharge your LLM interactions with full repository context.
 
-## Overview
+## What it does
 
-Repo Concatenator combines all files in a repository or directory into one file, respecting `.gitignore` rules. It provides a comprehensive view of your project's codebase, useful for context-aware AI interactions.
+Repo Concatenator creates a single file containing your entire codebase, making it easy to feed your project's context into Large Language Models (LLMs) like GPT-4.
 
-## Features
+## Key Features
 
-- Generates project folder structure
-- Creates a file index
-- Concatenates files into a single output
 - Respects `.gitignore` rules
-- Adds file section headers
-- Calculates basic repository statistics
-- Available in Python and JavaScript
+- Handles binary files and empties
+- Smart truncation for large files (e.g., JSON)
+- Works with Python and JavaScript
+- Customizable to fit your workflow
 
-## Usage
+## Quick Start
 
-### Python Version
+### Python
 
-1. Place `repo_concatenate.py` in your project's root directory.
-2. Run: `python repo_concatenate.py`
+```bash
+wget https://raw.githubusercontent.com/username/repo-concatenator/main/repo_concatenate.py
+python repo_concatenate.py
+```
 
-### JavaScript Version
+### JavaScript
 
-1. Place `repo-concatenate.js` in your project's root directory.
-2. Install dependencies: `npm install fs path url`
-3. Run: `node repo-concatenate.js`
+```bash
+wget https://raw.githubusercontent.com/username/repo-concatenator/main/repo_concatenate.js
+npm install fs path url
+node repo_concatenate.js
+```
 
-Output is saved as `{repo_name}.txt` in the same directory.
+Your consolidated codebase will be saved as `{repo_name}.txt` in the current directory.
 
-## Output Format
+## Output
 
-1. AI instructions
-2. Repository statistics
+1. AI-friendly instructions
+2. Repo stats
 3. Folder structure
 4. File index
-5. Full content of each file
+5. Full file contents (with handy navigation headers)
 
-## Contributing
+## Why use Repo Concatenator?
 
-Contributions are welcome. Open an issue or submit a pull request for improvements or new features.
+- **LLM-optimized**: Perfect for providing full context to AI coding assistants
+- **Time-saver**: No more copy-pasting multiple files
+- **Flexible**: Customizable for various project types and sizes
+- **Lightweight**: No complex dependencies or setups
+
+## Contribute
+
+Got ideas? Found a bug? Contributions are welcome! Open an issue or send a pull request.
 
 ## License
 
-MIT License. See LICENSE file for details.
+MIT License. Go wild, just give credit where it's due.
